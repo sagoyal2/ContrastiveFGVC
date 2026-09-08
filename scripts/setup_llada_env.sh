@@ -21,7 +21,10 @@ STORAGE="${VLM_PROBE_STORAGE:-$HOME/DataStorageDLLM}"
 SRC="$STORAGE/src"
 VENV="$ROOT/.venv-llada"
 
-command -v uv >/dev/null || { echo "install uv first: https://github.com/astral-sh/uv"; exit 1; }
+command -v uv >/dev/null || { echo "install uv first, or run ./scripts/bootstrap.sh"; exit 1; }
+
+# Same persisted wheel cache the main env uses, so this resolves from disk.
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$STORAGE/uv_cache}"
 
 mkdir -p "$SRC"
 if [ ! -d "$SRC/LLaDA-V" ]; then
@@ -48,7 +51,14 @@ uv pip install \
   "transformers==4.40.0" "accelerate==0.29.3" \
   "timm==0.9.16" "einops==0.6.1" "einops-exts==0.0.4" \
   "sentencepiece==0.1.99" "numpy==1.26.4" "protobuf" "shortuuid" \
-  "pillow" "pyyaml" "scikit-learn" "scipy" "pandas" "matplotlib" "tqdm"
+  "pillow" "pyyaml" "scikit-learn" "scipy" "pandas" "matplotlib" "tqdm" "tabulate"
+
+# Rung 5 of the generative matching cascade (§6.1). Without it the cascade stops
+# at rung 4 in THIS environment only, so LLaDA-V's Table 1 row would be scored by
+# a shorter cascade than the LLaVA rows and the two would not be comparable.
+# Pinned to 2.7.0: later releases require transformers>=4.41, which conflicts with
+# the 4.40 this fork needs.
+uv pip install "sentence-transformers==2.7.0"
 
 # The modelling code itself, and this repo so `python -m src.extract` resolves.
 uv pip install --no-deps -e "$SRC/LLaDA-V/train"

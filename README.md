@@ -6,20 +6,52 @@ between the vision encoder and the LM does concept–attribute signal get lost?*
 
 The spec is the source of truth. This README is only the operating manual.
 
-## Setup
+## Setup on a new machine
+
+The assumption is that you have exactly two things: **this repo, cloned**, and the
+**DataStorageDLLM mount**. Nothing else survives a machine change, and nothing else
+needs to.
 
 ```bash
-uv venv && uv pip install -e ".[dev,match]"
-./scripts/link_storage.sh      # recreate the data/ features/ results/ figures/ symlinks
-./scripts/download_cub.sh
+git clone <this repo> && cd ContrastiveFGVC
+./scripts/bootstrap.sh /path/to/DataStorageDLLM
 ```
 
-LLaDA-V needs a second environment — it has no HF port and its modelling code is
-pinned near `transformers==4.39`, which the LLaVA-1.5 HF port cannot share:
+That creates `.venv`, installs from `pyproject.toml`, recreates the storage
+symlinks, and prints what the mount already provides. It downloads almost
+nothing: the mount carries ~62 GB of model weights (`hf_cache/`), the datasets,
+every extracted feature, and ~7 GB of cached Python wheels (`uv_cache/`), which
+`bootstrap.sh` points `UV_CACHE_DIR` at.
+
+Persist the two environment variables it prints, so every later shell agrees on
+the mount:
 
 ```bash
-./scripts/setup_llada_env.sh   # creates .venv-llada
+export VLM_PROBE_STORAGE=/path/to/DataStorageDLLM
+export UV_CACHE_DIR=$VLM_PROBE_STORAGE/uv_cache
 ```
+
+Only if you need LLaDA-V — it has no HF port and its modelling code is pinned to
+`transformers==4.40`, which the LLaVA-1.5 HF port cannot share:
+
+```bash
+./scripts/setup_llada_env.sh   # creates .venv-llada; reuses the fork clone on the mount
+```
+
+Datasets are already on the mount. To fetch CUB from scratch:
+`./scripts/download_cub.sh`.
+
+### What lives where
+
+| in git | on the mount |
+|---|---|
+| all code, configs, scripts, tests | `datasets/`, `features/`, `results/`, `figures/` |
+| `pyproject.toml` (pinned) | `hf_cache/` — model weights |
+| `notes/decisions.md`, `WRITEUP.md` | `uv_cache/` — Python wheels |
+| the spec | `src/LLaDA-V` — the pinned fork clone |
+
+No tracked file contains an absolute path; every script resolves the mount from
+`$VLM_PROBE_STORAGE`.
 
 ## Phase 1 (CUB)
 
