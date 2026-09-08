@@ -110,3 +110,22 @@ model's own T0, not absolute top-1.
 
 Untested: re-extracting standalone SigLIP2 through `expand2square` should land
 near 73.5 if preprocessing is the whole story. ~3 min of GPU; not run.
+
+## Masked-mode taps: T3.* excludes the [MASK] span
+
+`--llada-mode masked --llada-k 32` appends k `[MASK]` tokens to the sequence, so
+`attention_mask.sum(1)` — the per-example length used for pooling — counts them.
+Pooled naively, `T3.avg` would average the mask states in and `T3.final` would be
+the **last mask token** rather than the last prompt token. The key names would then
+mean different tensors in `features/lladav_8b/` and
+`features/lladav_8b_masked32/`, and any table putting the two side by side would be
+comparing different quantities under one column header.
+
+`src/extract.py` therefore pools T3 over `seq_len - k`. **`T3.*` is always the
+prompt+image sequence, in both modes**, and the answer span appears only as
+`Tmask.avg` / `Tmask.first` / `Tmask.last`. This makes clean-vs-masked a controlled
+comparison: identical taps on identical inputs, differing only in whether the
+answer span exists.
+
+The mask span is entirely `[MASK]` (ratio 1.0), never partially filled with answer
+tokens, so no class name can leak into a probe (§11 check 7).

@@ -24,13 +24,27 @@ difference between them is a property of the representation and not of the setup
 
 ## 2. Headline: the drop is real, and it happens twice
 
-| model | T0.avg | T1.avg | T2.avg | T3.avg | T3.final |
-|---|---|---|---|---|---|
-| CLIP-L/14-336 (encoder) | 79.38 | — | — | — | — |
-| SigLIP2-so400m (encoder) | 84.83 | — | — | — | — |
-| LLaVA-1.5-7B | 79.43 | 72.25 | 63.84 | 64.89 | **70.76** |
-| LLaVA-1.5-13B | 79.43 | 71.83 | 61.87 | 62.27 | **69.33** |
-| LLaDA-V-8B | 73.46 | 64.36 | 60.75 | 60.80 | 23.02 |
+| model | T0.avg | T1.avg | T2.avg | T2.final | T3.avg | T3.final |
+|---|---|---|---|---|---|---|
+| CLIP-L/14-336 (encoder) | 79.38 | — | — | — | — | — |
+| SigLIP2-so400m (encoder) | 84.83 | — | — | — | — | — |
+| LLaVA-1.5-7B | 79.43 | 72.25 | 63.84 | 16.76 | 64.89 | **70.76** |
+| LLaVA-1.5-13B | 79.43 | 71.83 | 61.87 | 16.26 | 62.27 | **69.33** |
+| LLaDA-V-8B | 73.46 | 64.36 | 60.75 | 27.75 | 60.80 | 23.02 |
+
+`figures/fig5_recreation.pdf` plots the five series §12 specifies — T0.avg, T1.avg,
+T2.avg, **T2.final**, T3.final — so its fourth bar is T2.final, not T3.avg. Both
+columns are given here so the figure and the table can be read against each other.
+
+The `final` columns are not one quantity. **T2.final** is the last image token: under
+LLaVA's causal attention it has attended over the whole image, but it is a single
+patch and probes far below the mean (16.76 vs 63.84). **T3.final** is the `:` token
+for the LLaVA models — the state the answer is decoded from, and the strongest tap
+they have (70.76). For LLaDA-V neither reading applies: it decodes from
+appended mask positions rather than from the last prompt token, so T3.final is just
+some text position, which is why it (23.02) sits beside T3.pos0 (22.71) rather than
+near T3.avg. **Do not compare LLaDA-V's T3.final against the LLaVA models' — they are
+structurally different quantities.**
 
 Two distinct losses, different in kind:
 
@@ -109,9 +123,74 @@ LLaDA-V's bidirectional attention produces a signature the causal models cannot:
 
 Under causal attention position 0 sees nothing and sits at chance — which is why it
 works as a falsification control. Under bidirectional attention it attends over all 729
-image tokens and carries real signal, and `pos0 ≈ final` (22.71 vs 23.02) because no
-position is privileged. The avg-vs-final gap is 13–14 points narrower than the causal
-models', as §9 predicts.
+image tokens and carries real signal.
+
+**Bidirectional does not mean positions are interchangeable**, and the data is emphatic
+about this. LLaDA applies rotary embeddings, so every position is fully distinguished;
+what bidirectional attention removes is only the *causal* asymmetry, i.e. the left-to-right
+accumulation that makes LLaVA's `:` token a running summary. Positions still differ by a
+lot:
+
+| positions | probe |
+|---|---|
+| image span (T2.avg) | 60.75 |
+| all positions (T3.avg) | 60.80 — 729 of ~806 tokens are image, so the mean tracks them |
+| text position 0 (T3.pos0) | 22.71 |
+| last text position (T3.final) | 23.02 |
+
+**37.7 points** separate image from text positions. `pos0 ≈ final` is therefore a
+statement about two comparable *text* positions — neither of which the model decodes
+from — not about positions in general. The avg-vs-final gap is 13–14 points narrower
+than the causal models', as §9 predicts.
+
+### 5.1 Masked mode (k = 32): the mask positions are the answer
+
+Clean mode understates LLaDA-V, and by a lot. Appending 32 `[MASK]` tokens — the §9
+`masked` tap, which is the configuration the diffusion decoder actually runs — changes
+every post-LLM number, on identical images and an identical prompt:
+
+| tap | clean | masked (k=32) | Δ |
+|---|---|---|---|
+| T0.avg / T1.avg (pre-LLM) | 73.46 / 64.36 | 73.46 / 64.36 | **0.00** — control |
+| T2.avg (image span) | 60.75 | 66.66 | **+5.91** |
+| T2.final | 27.75 | 31.74 | +3.99 |
+| T3.avg (prompt+image) | 60.80 | 65.81 | +5.01 |
+| T3.final (last prompt token) | 23.02 | 33.59 | +10.57 |
+| T3.pos0 | 22.71 | 34.00 | +11.29 |
+| **Tmask.avg** (answer span) | — | **67.24** | — |
+| Tmask.first / Tmask.last | — | 46.63 / 45.72 | — |
+
+Three things follow.
+
+**The mask span carries the most class information of any tap.** `Tmask.avg` = 67.24
+exceeds even the image span, and sits only 8.5% below the pre-projection ceiling
+(73.46). Measured where LLaDA-V actually decodes, its retention is comparable to
+LLaVA-7B's T3.final of 70.76 — not the catastrophic 23.02 that clean mode suggests.
+
+**Adding the answer span improves the image representations themselves.** T2.avg rises
+5.91 points although T0 and T1 are bit-identical. Under bidirectional attention the
+image positions attend *to* the masks, so the presence of an answer span reshapes what
+they encode. This cannot happen in a causal model, where appended tokens lie to the
+right and image positions can never see them. It is the sharpest VDLM-specific result
+here.
+
+**The information is distributed across the span, not concentrated.** Any single mask
+position probes at ~46 (first 46.63, last 45.72, and equal to each other — parity
+again), while the mean over 32 reaches 67.24. Different mask positions carry
+complementary information. An autoregressive model concentrates the decision at one
+next-token position; this one spreads it.
+
+**What the mask positions add is composition, not content.** On the attribute probe the
+answer span is *not* better than the image span — lift +22.07 versus +22.39 — while on
+the class probe it is (67.24 versus 66.66, and versus 60.75 in clean mode). The masks
+are not accumulating extra visual detail; they are composing attributes already present
+into a class identity. That is the concept–attribute hypothesis appearing exactly where
+the architecture predicts it should.
+
+**Caveat.** `k` is a free parameter, only k=32 was run, and LLaVA has no analogue of
+this tap — §9's stated trade-off. `Tmask` is its own row and must not be merged into a
+T3 column. Features live in `features/lladav_8b_masked32/`; `T3.*` there excludes the
+mask span so clean-vs-masked is a controlled comparison (`notes/decisions.md`).
 
 **Two of the spec's checks needed rewriting, not the data.** The position-0 control and
 the "T2.avg ≈ T2.final" test were both encoded as architecture-blind thresholds; both
@@ -141,14 +220,17 @@ digit at T0 (shared frozen tower); T3.pos0 = 0.33% against a 0.5% chance floor.
    at ~45% of its squashed pixel area. Same tower, 84.83 vs 73.46. Three independent
    signatures confirm it (T0, T1.final = 4.90, T1.final mAP lift = +3.25 — the last patch
    is padding). Cross-model comparisons here use *relative* loss from each model's own T0.
-3. **LLaDA-V has no generative number.** Its `generate_with_embeds` is batch-size-1
+3. **Only k = 32 was run for masked mode**, and `k` is free. The clean-vs-masked gap
+   (§5.1) is large enough that the choice matters; §9's `sweep` mode over mask ratios
+   was not run.
+4. **LLaDA-V has no generative number.** Its `generate_with_embeds` is batch-size-1
    (~4.4 s/image, ~7 h for the split) and our vicuna-style prompt is not its native conv
    template — it emits `"ASSassistant:"`. Not run.
-4. **No dimensionality control.** Taps are 1024–5120 wide and a wider linear probe is
+5. **No dimensionality control.** Taps are 1024–5120 wide and a wider linear probe is
    strictly more expressive. This does not threaten the headline — T0 (1024) *beats* T1
    and T2 (4096), so the drop runs against the width advantage — but comparisons that run
    the other way (T3.final at 4096 vs T0.avg at 1024) are unresolved.
-5. **Scoped out by decision** (`notes/decisions.md`): T3-txt text control, further layer
+6. **Scoped out by decision** (`notes/decisions.md`): T3-txt text control, further layer
    sweeps, PCA-1024, k-NN. ImageNet zero-shot used one template, not the 80-prompt
    ensemble.
 

@@ -123,8 +123,18 @@ def extract_vlm(model, ds, args, out_dir: Path) -> None:
         writer.add("T2.avg", taps.t2.mean(1))
         writer.add("T2.final", taps.t2[:, -1])
         # T3 is the padded full sequence, so it *does* need seq_len.
-        writer.add("T3.avg", pool_tokens(taps.t3, "avg", taps.seq_len))
-        writer.add("T3.final", pool_tokens(taps.t3, "final", taps.seq_len))
+        #
+        # In LLaDA-V's masked mode the sequence carries k appended [MASK] tokens.
+        # Pooling T3 over the raw seq_len would average them in and would make
+        # "T3.final" the last MASK rather than the last prompt token — the same key
+        # name meaning a different tensor than in clean mode, which is precisely how
+        # an incomparable number gets into a table. So T3.* is always the
+        # prompt+image sequence, and the answer span is reported only as Tmask.*.
+        k_mask = taps.extra["mask_states"].shape[1] if "mask_states" in taps.extra else 0
+        t3_len = [n - k_mask for n in taps.seq_len]
+        assert all(n > 0 for n in t3_len), f"mask span {k_mask} >= sequence length"
+        writer.add("T3.avg", pool_tokens(taps.t3, "avg", t3_len))
+        writer.add("T3.final", pool_tokens(taps.t3, "final", t3_len))
         # §11 check 2: position 0 must probe near chance. Cheap to store, and it
         # is the check that catches slicing the wrong tensor entirely.
         writer.add("T3.pos0", taps.t3[:, 0])
@@ -132,6 +142,16 @@ def extract_vlm(model, ds, args, out_dir: Path) -> None:
         for k, h in taps.mid.items():
             writer.add(f"mid.L{k}.avg", h.mean(1))
             writer.add(f"mid.L{k}.final", h[:, -1])
+
+        # §9 masked mode: the answer-span states. `Tmask.avg` is the mean over the
+        # k mask positions, `Tmask.first` the first one — the position the decoder
+        # commits to earliest. These are the on-policy tap for a diffusion decoder
+        # and have no LLaVA analogue, so they are reported separately.
+        if "mask_states" in taps.extra:
+            ms = taps.extra["mask_states"]
+            writer.add("Tmask.avg", ms.mean(1))
+            writer.add("Tmask.first", taps.extra["mask_first"])
+            writer.add("Tmask.last", ms[:, -1])
 
         if not first_batch_note:
             first_batch_note = {
@@ -193,6 +213,13 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                         "way to shrink a 1000-way set; --limit is not.")
     p.add_argument("--sweep", action="store_true", help="also write the §8.3B layer sweep")
     p.add_argument("--device", default="cuda")
+    p.add_argument("--llada-mode", default=None, choices=["clean", "masked"],
+                   help="§9. 'clean' is one forward pass with no [MASK] in the answer "
+                        "span — structurally comparable to LLaVA. 'masked' appends k "
+                        "[MASK] tokens and taps their positions, which is the state "
+                        "LLaDA-V actually decodes from but has no LLaVA analogue.")
+    p.add_argument("--llada-k", type=int, default=None,
+                   help="number of [MASK] tokens in the answer span (§9)")
     p.add_argument("--overwrite", action="store_true")
     args = p.parse_args(argv)
 
@@ -204,13 +231,25 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         args.batch_size = int(mcfg.get("batch_size", 32))
 
     ds_tag = args.dataset if args.classes is None else f"{args.dataset}_c{args.classes}"
-    out_dir = feature_dir(args.model, ds_tag, args.split)
+    # A masked-mode run taps different tensors under a different input; writing it
+    # into the clean-mode tree would silently replace features the clean numbers
+    # were computed from.
+    model_tag = args.model
+    if args.llada_mode == "masked":
+        model_tag = f"{args.model}_masked{args.llada_k or ''}"
+    out_dir = feature_dir(model_tag, ds_tag, args.split)
     if (out_dir / "manifest.json").exists() and not args.overwrite:
         print(f"{out_dir} already populated; pass --overwrite to redo")
         return
 
+    overrides = {}
+    if args.llada_mode is not None:
+        overrides["llada_mode"] = args.llada_mode
+    if args.llada_k is not None:
+        overrides["llada_k"] = args.llada_k
+
     print(f"building {args.model} ...", flush=True)
-    model = build_model(args.model, device=args.device)
+    model = build_model(args.model, device=args.device, **overrides)
 
     ds = get_dataset(args.dataset, args.split)
     if args.classes is not None:

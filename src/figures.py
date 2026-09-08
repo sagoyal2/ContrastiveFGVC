@@ -55,7 +55,11 @@ def _agg(df: pd.DataFrame) -> pd.DataFrame:
 
 def fig5(df: pd.DataFrame, datasets: Sequence[str], head: str, out: Path) -> None:
     g = _agg(df[df["head"] == head])
-    present = set(g["model"].unique())
+    # A masked-mode run is the same model under a different tap protocol, not a
+    # different model: its T0/T1/T2 bars are identical to clean mode by
+    # construction, so a sixth panel would duplicate three of five bars and read
+    # as a separate system. Clean-vs-masked belongs in its own table (WRITEUP §5).
+    present = {m for m in g["model"].unique() if "_masked" not in str(m)}
     models = ([m for m in MODEL_ORDER if m in present]
               + sorted(present - set(MODEL_ORDER)))
     fig, axes = plt.subplots(1, len(models), figsize=(6.5 * len(models), 4.6), squeeze=False)
