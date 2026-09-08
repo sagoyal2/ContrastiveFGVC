@@ -1,0 +1,19 @@
+# LLaVA-1.5-7B (§4). HF port rather than liuhaotian/llava-v1.5-7b: the processor
+# expands <image> inside input_ids, so the image-token span is read off directly
+# instead of reconstructed (§5.1, "prefer the HF port").
+kind: llava
+hf_id: llava-hf/llava-1.5-7b-hf
+dtype: bfloat16
+
+# Asserted at construction, not assumed (§4). Reading the last ViT block instead
+# of the penultimate one would make the T0->T1 drop an artefact (§13).
+mm_vision_select_layer: -2
+mm_vision_select_feature: patch
+
+d_vis: 1024
+d_llm: 4096
+n_layers: 32
+m: 576
+# §8.3B: {0, 8, 16, 24, 32}. 0 is the embedding output, i.e. T1 spliced in.
+sweep_layers: [0, 8, 16, 24, 32]
+batch_size: 32

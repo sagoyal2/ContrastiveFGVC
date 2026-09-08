@@ -1,0 +1,23 @@
+# LLaDA-V-8B, the V-DLM (§4, §9).
+# NOT runnable in the main .venv: GSAI-ML/LLaDA-V ships no modeling_*.py, so it
+# needs the ML-GSAI/LLaDA-V fork (LLaVA-NeXT near transformers==4.39) in its own
+# environment. See scripts/setup_llada_env.sh.
+kind: llada_v
+hf_id: GSAI-ML/LLaDA-V
+dtype: bfloat16
+
+mode: clean          # §9 decision: default to the clean single forward pass
+mask_k: 8
+aspect_ratio: pad    # force the single-tile path -> fixed m=729, comparable to 576
+
+d_vis: 1152
+d_llm: 4096
+n_layers: 32
+m: null              # variable under anyres; verified at runtime (§13)
+sweep_layers: [0, 8, 16, 24, 32]
+batch_size: 16
+
+# flash-attn is not installed in .venv-llada (training-only dependency needing
+# compilation against an old torch); the fork's builder would otherwise default
+# to flash_attention_2 and fail at load.
+attn_implementation: sdpa

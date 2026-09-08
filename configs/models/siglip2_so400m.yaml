@@ -1,0 +1,11 @@
+# LLaDA-V's vision tower (§4). SigLIP has no CLS token: the pooled vector comes
+# from an attention-pooling head, so every hidden-state position is a patch.
+kind: encoder
+hf_id: google/siglip2-so400m-patch14-384
+dtype: bfloat16
+select_layer: -2
+has_cls: false
+d_vis: 1152
+d_contrastive: 1152
+m: 729
+batch_size: 48

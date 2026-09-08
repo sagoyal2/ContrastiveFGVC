@@ -1,0 +1,38 @@
+# --- environments -------------------------------------------------------
+# .venv is the main interpreter; .venv-llada is the second one LLaDA-V needs
+# (transformers 4.40 vs 4.56 — see scripts/setup_llada_env.sh). ~14 GB together.
+.venv/
+.venv-llada/
+
+# --- storage symlinks ---------------------------------------------------
+# These four point into $VLM_PROBE_STORAGE (DataStorageDLLM) and hold every
+# dataset, feature tensor, result and figure. They are *absolute* symlinks, so
+# committing them would hand the next machine four dangling paths. They are
+# recreated on demand by src.paths.ensure_dirs(), or explicitly with
+# scripts/link_storage.sh.
+/data
+/features
+/results
+/figures
+
+# --- build + cache ------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# --- stray outputs ------------------------------------------------------
+# Nothing heavy should ever land in the repo, but these are the shapes it would
+# take if a path were ever mis-set.
+*.npy
+*.npz
+*.safetensors
+*.pt
+*.pth
+*.tgz
+*.tar
+*.jsonl
+nohup.out

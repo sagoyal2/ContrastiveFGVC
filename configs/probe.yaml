@@ -1,0 +1,21 @@
+# Probe config, verbatim from Zhang et al. Appendix B.4 (§6.2).
+probe:
+  head: linear            # nn.Linear(d, num_classes) — no BN, no bias tricks
+  standardize: true       # mean/std fit on train only (§13: post-LLM scales vary wildly)
+  optimizer: adam
+  lr: 1.0e-3
+  batch_size: 512
+  epochs: 500
+  weight_decay: 0.0
+  select: best_val_top1
+  seeds: [0, 1, 2]
+
+# 10% stratified off train, fixed seed 0 (§7). Test is touched once per number.
+val_fraction: 0.1
+val_seed: 0
+
+# The fast path used for sweeps (§6.2). Headline cells are reproduced with the
+# torch config above; the two differ by ~0.5% and must not be mixed in one table (§13).
+sklearn:
+  max_iter: 1000
+  C: 1.0

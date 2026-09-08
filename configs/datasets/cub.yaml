@@ -1,0 +1,34 @@
+# CUB-200-2011 (§7). The Phase 1 pilot: smallest of the five, ships the 312
+# binary attributes Experiment 3 needs, and appears in FINER Fig. 5.
+name: cub
+granularity: fine
+num_classes: 200
+# Official split file, not a re-carve: train_test_split.txt gives 5,994 / 5,794.
+train_size: 5994
+test_size: 5794
+root: cub/CUB_200_2011
+url: https://data.caltech.edu/records/65de6-vp158/files/CUB_200_2011.tgz?download=1
+archive: cub/CUB_200_2011.tgz
+
+# §6.1 zero-shot templates. CUB is birds, so say so — the standard fine-grained
+# trick of naming the domain in the prompt.
+templates:
+  - "a photo of a {}, a type of bird."
+  - "a photo of a {}."
+
+# Experiment 1 questions (§6.1). `default` is Zhang et al. B.4 verbatim and is
+# the one comparable to their numbers; it was written for ImageNet, where
+# "object" is the right granularity. On CUB it reliably draws "a bird", so the
+# `fine` question asks at the granularity the label set actually uses. Report
+# both rows — the difference between them is prompt design, not capability.
+generative_questions:
+  default: "What type of object is in this photo?"
+  fine: "What is the species of the bird in this photo?"
+
+attributes:
+  enabled: true
+  count: 312
+  # image_attribute_labels.txt is 3.7M rows; certainty 1 ("not visible") rows are
+  # dropped and the remainder binarised on is_present.
+  file: attributes/image_attribute_labels.txt
+  names: attributes.txt

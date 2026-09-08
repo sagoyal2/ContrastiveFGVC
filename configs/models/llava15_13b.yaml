@@ -1,0 +1,19 @@
+# LLaVA-1.5-13B (§4). Same vision tower as the 7B; only the LLM widens.
+kind: llava
+hf_id: llava-hf/llava-1.5-13b-hf
+dtype: bfloat16
+
+mm_vision_select_layer: -2
+mm_vision_select_feature: patch
+
+d_vis: 1024
+d_llm: 5120
+n_layers: 40
+m: 576
+sweep_layers: [0, 10, 20, 30, 40]
+# 13B in bf16 is ~26 GB of weights; this box is a 40 GB A100, not the 80 GB the
+# spec budgets for (§8). `output_hidden_states=True` keeps all 41 layers of
+# [B, 627, 5120] resident at once, so the activation cost scales with B and the
+# ~13 GB left over is the whole budget. Batch 16 OOMs (measured: 35.4 GB
+# allocated before it died); 8 leaves headroom. Do not raise this on a 40 GB card.
+batch_size: 8

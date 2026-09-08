@@ -1,0 +1,11 @@
+# The vision tower LLaVA-1.5 actually uses, run standalone (§5).
+# Gives T0-c (contrastive ceiling) and T0 (what the projector consumes).
+kind: encoder
+hf_id: openai/clip-vit-large-patch14-336
+dtype: bfloat16
+select_layer: -2      # penultimate, to match mm_vision_select_layer
+has_cls: true
+d_vis: 1024
+d_contrastive: 768
+m: 576
+batch_size: 64

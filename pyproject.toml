@@ -1,0 +1,68 @@
+[project]
+name = "vlm-probe"
+version = "0.1.0"
+description = "Feature-tap + linear-probe harness for localizing concept-attribute signal loss in VLMs / V-DLMs"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Avi" }]
+
+dependencies = [
+    "torch==2.8.0",
+    "torchvision==0.23.0",
+    "transformers==4.56.1",
+    "accelerate==1.10.1",
+    "safetensors==0.6.2",
+    "sentencepiece==0.2.1",
+    "protobuf==6.32.0",
+    "huggingface-hub==0.34.4",
+    "datasets==4.0.0",
+    "timm==1.0.19",
+    "einops==0.8.1",
+    "numpy==2.1.3",
+    "scipy==1.15.3",
+    "scikit-learn==1.7.1",
+    "pandas==2.3.2",
+    "matplotlib==3.10.6",
+    "pillow==11.3.0",
+    "pyyaml==6.0.2",
+    "tqdm==4.67.1",
+    "requests==2.32.5",
+    "tabulate==0.9.0",
+]
+
+[project.optional-dependencies]
+# Rung 5 of the generative matching cascade (§6.1). Pulls a second torch-adjacent
+# stack, so it is optional: without it the matcher stops at rung 4 and reports a
+# higher %unmatched rather than failing.
+match = ["sentence-transformers==5.1.0"]
+dev = ["pytest==8.4.2", "ruff==0.12.11"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.uv]
+# CUDA 12.8 wheels: the box reports driver 580.x / CUDA 13.0, which is
+# backwards compatible with the cu128 build.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "gpu: needs a GPU and downloaded model weights",
+    "data: needs a downloaded dataset",
+]
+
+[tool.ruff]
+line-length = 100
